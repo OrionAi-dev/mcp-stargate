@@ -27,8 +27,32 @@ The later gateway should add:
 - MCP server manifest pinning
 - tool-description hashing and drift detection
 - signed approval records
+- secure session envelopes
+- optional payload encryption
+- replay prevention
 - call and projection audit ledger
 - server capability inventory
 - compatibility adapters for MCP clients and servers
 
 The gateway should build on the alpha guard primitives instead of replacing them.
+
+## Secure Session Envelope
+
+Prompt-injection defense is not enough for multi-agent or remote MCP deployments. A separate agent, proxy, or compromised transport could silently observe, replay, or mutate MCP traffic unless the session itself is bound to identity and audit.
+
+A secure MCP session should include:
+
+- client identity
+- server identity
+- session id
+- signed session grant
+- purpose and audience
+- issued and expiration times
+- per-message sequence numbers
+- nonces
+- message digests
+- optional signatures or MACs
+- optional payload encryption
+- hash-chained audit records
+
+Context packets projected from MCP output should preserve the session id and source message id in provenance so downstream clients can prove where context came from.

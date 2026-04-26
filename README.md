@@ -86,10 +86,17 @@ MCP Trust Gate is built around signed or signable artifacts:
 
 - `ManifestCertificate`: pins a server identity, tool surface, transport, publisher, and expiration.
 - `CapabilityCertificate`: describes which capability classes a server or tool is allowed to expose.
+- `SessionGrant`: scopes confidential, auditable agent-to-tool sessions.
 - `ApprovalGrant`: records a human-approved exception with scope, subject, action, audience, expiration, and digest.
 - `ProjectedContextPacket`: converts selected untrusted MCP output into a policy-scoped handoff artifact.
 
 The first implementation computes stable fingerprints and validates structure. Real signature providers and revocation stores are planned next.
+
+## Security Thesis
+
+Prompt injection is the first visible MCP risk. The deeper problem is that MCP lacks a durable trust layer for identity, capability, session confidentiality, provenance, and replayable audit.
+
+MCP Trust Gate is designed to grow toward secure MCP session envelopes: signed session grants, client/server identity, per-message sequence numbers, replay prevention, optional payload encryption, and hash-chained audit records.
 
 ## Relationship To Secure Context Sharing
 

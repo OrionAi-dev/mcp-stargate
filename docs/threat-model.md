@@ -16,6 +16,10 @@ MCP Trust Gate treats this as a boundary problem, not only a content-filtering p
 - Cross-server escalation: an untrusted server influences calls to a more privileged server.
 - Context laundering: untrusted output is summarized and later treated as trusted context.
 - Approval ambiguity: a human approves one action but the runtime applies that approval too broadly.
+- Silent observation: another agent, proxy, or compromised transport observes MCP traffic without being represented in provenance.
+- Message replay: a valid tool request, response, or approval is reused in a later session.
+- Message mutation: MCP traffic is altered between client, gate, and server.
+- Session confusion: context from one agent/tool session is introduced into another without identity or audience checks.
 
 ## Controls
 
@@ -23,10 +27,13 @@ MCP Trust Gate treats this as a boundary problem, not only a content-filtering p
 - Signable manifest certificates.
 - Capability certificates.
 - Approval grants with scope, audience, action, and expiration.
+- Session grants with scoped client/server identity.
+- Per-message sequence numbers and nonces.
+- Optional payload encryption for remote or multi-agent sessions.
 - Conservative default policy.
 - Untrusted output tainting.
 - Context packet projection with provenance.
-- Later: revocation, live proxying, transport mediation, and replayable audit logs.
+- Later: revocation, live proxying, transport mediation, and replayable hash-chained audit logs.
 
 ## Non-Goals
 
