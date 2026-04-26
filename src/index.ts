@@ -3,6 +3,8 @@ export * from './types.js';
 import { createHash } from 'node:crypto';
 import type {
   ApprovalGrant,
+  AuditEventType,
+  AuditRecord,
   CapabilityCertificate,
   ContextPacketProjectionInput,
   EvaluateMcpCallInput,
@@ -14,8 +16,11 @@ import type {
   McpCapabilityRisk,
   McpServerManifest,
   McpToolDescriptor,
+  MessageEnvelope,
   ProjectedContextPacket,
   SecureContextPolicy,
+  SessionEnvelope,
+  SessionGrant,
   UntrustedMcpOutput,
   UntrustedMcpSource
 } from './types.js';
@@ -98,6 +103,10 @@ export function createUnsignedManifestCertificate(
     certificate.expiresAt = input.expiresAt;
   }
   return certificate;
+}
+
+export function digestTrustArtifact(value: unknown): string {
+  return sha256Hex(value);
 }
 
 export function validateManifestCertificate(
@@ -278,6 +287,209 @@ export function evaluateApprovalGrant(
   return reasons;
 }
 
+export function createSessionEnvelope(
+  grant: SessionGrant,
+  input: {
+    sessionId: string;
+    transport?: SessionEnvelope['transport'];
+    createdAt?: string;
+    keyAgreement?: SessionEnvelope['keyAgreement'];
+  }
+): SessionEnvelope {
+  const envelope: SessionEnvelope = {
+    kind: 'session_envelope',
+    sessionId: input.sessionId,
+    grantId: grant.grantId,
+    clientId: grant.clientId,
+    serverId: grant.serverId,
+    purpose: grant.purpose,
+    transport: input.transport ?? 'unknown',
+    createdAt: input.createdAt ?? new Date().toISOString(),
+    lastSequence: 0
+  };
+
+  if (grant.audience) {
+    envelope.audience = grant.audience;
+  }
+  if (grant.expiresAt) {
+    envelope.expiresAt = grant.expiresAt;
+  }
+  if (input.keyAgreement) {
+    envelope.keyAgreement = input.keyAgreement;
+  }
+
+  return envelope;
+}
+
+export function validateSessionGrant(
+  grant: SessionGrant,
+  input: { action?: GuardAction; audience?: string; manifestFingerprint?: string; now?: Date } = {}
+): string[] {
+  const reasons: string[] = [];
+  const now = input.now ?? new Date();
+
+  if (isExpired(grant.expiresAt, now)) {
+    reasons.push('session grant is expired');
+  }
+
+  if (input.action && !grant.allowedActions.includes(input.action)) {
+    reasons.push(`session grant does not allow action '${input.action}'`);
+  }
+
+  if (input.audience && grant.audience && grant.audience !== input.audience) {
+    reasons.push(`session grant does not allow audience '${input.audience}'`);
+  }
+
+  if (
+    input.manifestFingerprint &&
+    grant.manifestFingerprint &&
+    grant.manifestFingerprint !== input.manifestFingerprint
+  ) {
+    reasons.push('session grant manifest fingerprint does not match');
+  }
+
+  return reasons;
+}
+
+export function createMessageEnvelope<T>(
+  session: SessionEnvelope,
+  input: {
+    sequence: number;
+    nonce: string;
+    direction: MessageEnvelope<T>['direction'];
+    payload: T;
+    method?: string;
+    toolName?: string;
+    messageId?: string;
+    encrypted?: boolean;
+    signature?: MessageEnvelope<T>['signature'];
+  }
+): MessageEnvelope<T> {
+  const payloadDigest = sha256Hex(input.payload);
+  const envelope: MessageEnvelope<T> = {
+    kind: 'message_envelope',
+    sessionId: session.sessionId,
+    messageId: input.messageId ?? `${session.sessionId}:${input.sequence}`,
+    sequence: input.sequence,
+    nonce: input.nonce,
+    direction: input.direction,
+    payload: input.payload,
+    payloadDigest,
+    encrypted: input.encrypted ?? false
+  };
+
+  if (input.method) {
+    envelope.method = input.method;
+  }
+  if (input.toolName) {
+    envelope.toolName = input.toolName;
+  }
+  if (input.signature) {
+    envelope.signature = input.signature;
+  }
+
+  return envelope;
+}
+
+export function validateMessageEnvelope(
+  session: SessionEnvelope,
+  message: MessageEnvelope,
+  input: { expectedNextSequence?: number; now?: Date } = {}
+): string[] {
+  const reasons: string[] = [];
+  const expectedNextSequence = input.expectedNextSequence ?? session.lastSequence + 1;
+  const now = input.now ?? new Date();
+
+  if (message.sessionId !== session.sessionId) {
+    reasons.push('message envelope session id does not match session');
+  }
+
+  if (message.sequence !== expectedNextSequence) {
+    reasons.push(`message envelope sequence ${message.sequence} does not match expected ${expectedNextSequence}`);
+  }
+
+  if (isExpired(session.expiresAt, now)) {
+    reasons.push('session envelope is expired');
+  }
+
+  if (!message.encrypted && session.keyAgreement && session.keyAgreement.algorithm !== 'none') {
+    reasons.push('message envelope is not encrypted for encrypted session');
+  }
+
+  if (message.payload !== undefined && message.payloadDigest !== sha256Hex(message.payload)) {
+    reasons.push('message envelope payload digest does not match payload');
+  }
+
+  return reasons;
+}
+
+export function recordMessageSequence(
+  session: SessionEnvelope,
+  message: MessageEnvelope
+): SessionEnvelope {
+  return {
+    ...session,
+    lastSequence: message.sequence
+  };
+}
+
+export function createAuditRecord(
+  input: {
+    eventType: AuditEventType;
+    event: unknown;
+    timestamp?: string;
+    previousRecordDigest?: string;
+    sessionId?: string;
+    messageId?: string;
+    decisionId?: string;
+    approvalGrantId?: string;
+    projectedContextPacketId?: string;
+  }
+): AuditRecord {
+  const timestamp = input.timestamp ?? new Date().toISOString();
+  const eventDigest = sha256Hex(input.event);
+  const base = {
+    eventType: input.eventType,
+    eventDigest,
+    previousRecordDigest: input.previousRecordDigest,
+    sessionId: input.sessionId,
+    messageId: input.messageId,
+    decisionId: input.decisionId,
+    approvalGrantId: input.approvalGrantId,
+    projectedContextPacketId: input.projectedContextPacketId,
+    timestamp
+  };
+  const record: AuditRecord = {
+    kind: 'audit_record',
+    recordId: sha256Hex(base),
+    eventType: input.eventType,
+    eventDigest,
+    recordDigest: sha256Hex({ ...base, kind: 'audit_record' }),
+    timestamp
+  };
+
+  if (input.previousRecordDigest) {
+    record.previousRecordDigest = input.previousRecordDigest;
+  }
+  if (input.sessionId) {
+    record.sessionId = input.sessionId;
+  }
+  if (input.messageId) {
+    record.messageId = input.messageId;
+  }
+  if (input.decisionId) {
+    record.decisionId = input.decisionId;
+  }
+  if (input.approvalGrantId) {
+    record.approvalGrantId = input.approvalGrantId;
+  }
+  if (input.projectedContextPacketId) {
+    record.projectedContextPacketId = input.projectedContextPacketId;
+  }
+
+  return record;
+}
+
 export function markUntrustedMcpOutput<T>(
   value: T,
   source: UntrustedMcpSource,
@@ -301,7 +513,7 @@ export function projectMcpOutputToContextPacket<T>(
   return {
     schema: 'mcp-secure-context.container.v0.1',
     containerType: 'knowledge_object',
-    id: input.packetId ?? `mcp-trust-gate-${now.getTime()}`,
+    id: input.packetId ?? `mcp-stargate-${now.getTime()}`,
     version: '0.1.0',
     payload: {
       title: 'Projected MCP output',
@@ -311,12 +523,12 @@ export function projectMcpOutputToContextPacket<T>(
     policy: input.policy,
     provenance: {
       createdAt: now.toISOString(),
-      createdBy: input.createdBy ?? 'mcp-trust-gate',
+      createdBy: input.createdBy ?? 'mcp-stargate',
       sourceRefs: [input.source],
       derivation: 'mcp_trust_gate_projection'
     },
     ext: {
-      'mcp-trust-gate': {
+      'mcp-stargate': {
         tainted: true,
         instructionUse: 'forbidden'
       }

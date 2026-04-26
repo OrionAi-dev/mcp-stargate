@@ -1,12 +1,12 @@
-# MCP Trust Gate
+# MCP Stargate
 
-MCP Trust Gate is a certificate-backed trust boundary for Model Context Protocol tool, resource, and context flows.
+MCP Stargate is a certificate-backed trust boundary for Model Context Protocol tool, resource, and context flows.
 
-MCP can connect agents to useful tools and data, but MCP output should not be treated as trusted instructions. MCP Trust Gate makes the safe path deterministic: pin capabilities, verify signed trust artifacts, enforce local policy, taint untrusted output, and project selected data into bounded context packets.
+MCP can connect agents to useful tools and data, but MCP output should not be treated as trusted instructions. MCP Stargate makes the safe path deterministic: pin capabilities, verify signed trust artifacts, enforce local policy, taint untrusted output, and project selected data into bounded context packets.
 
 ## Positioning
 
-MCP Trust Gate protects the MCP boundary.
+MCP Stargate protects the MCP boundary.
 
 `mcp-secure-context-sharing` defines safe handoff artifacts: context containers, policy metadata, provenance, verification, and digests.
 
@@ -28,7 +28,7 @@ The default profile:
 
 ## Current Package
 
-This initial package contains the alpha trust-gate primitives:
+This initial package contains the alpha Stargate primitives:
 
 - MCP server manifest fingerprints
 - capability certificates
@@ -45,13 +45,13 @@ It intentionally does not implement a full MCP proxy yet. Gateway behavior with 
 ## Install
 
 ```sh
-pnpm add mcp-trust-gate
+pnpm add mcp-stargate
 ```
 
 ## Example
 
 ```ts
-import { evaluateMcpCall, projectMcpOutputToContextPacket } from 'mcp-trust-gate';
+import { evaluateMcpCall, projectMcpOutputToContextPacket } from 'mcp-stargate';
 
 const decision = evaluateMcpCall({
   tool: {
@@ -82,7 +82,7 @@ const packet = projectMcpOutputToContextPacket({
 
 ## Trust Artifacts
 
-MCP Trust Gate is built around signed or signable artifacts:
+MCP Stargate is built around signed or signable artifacts:
 
 - `ManifestCertificate`: pins a server identity, tool surface, transport, publisher, and expiration.
 - `CapabilityCertificate`: describes which capability classes a server or tool is allowed to expose.
@@ -96,11 +96,11 @@ The first implementation computes stable fingerprints and validates structure. R
 
 Prompt injection is the first visible MCP risk. The deeper problem is that MCP lacks a durable trust layer for identity, capability, session confidentiality, provenance, and replayable audit.
 
-MCP Trust Gate is designed to grow toward secure MCP session envelopes: signed session grants, client/server identity, per-message sequence numbers, replay prevention, optional payload encryption, and hash-chained audit records.
+MCP Stargate is designed to grow toward secure MCP session envelopes: signed session grants, client/server identity, per-message sequence numbers, replay prevention, optional payload encryption, and hash-chained audit records.
 
 ## Relationship To Secure Context Sharing
 
-MCP Trust Gate should use `@mcp-secure-context/core` container semantics when the secure-context packages are available. The trust gate remains dependency-light so clients can classify and deny unsafe MCP behavior before loading larger adapter stacks.
+MCP Stargate should use `@mcp-secure-context/core` container semantics when the secure-context packages are available. The package remains dependency-light so clients can classify and deny unsafe MCP behavior before loading larger adapter stacks.
 
 ## Development
 

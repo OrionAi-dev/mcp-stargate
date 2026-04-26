@@ -1,5 +1,5 @@
 {
-  "name": "mcp-trust-gate",
+  "name": "mcp-stargate",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -27,7 +27,7 @@
   },
   "keywords": [
     "mcp",
-    "mcp-trust-gate",
+    "mcp-stargate",
     "mcp-certificates",
     "prompt-injection",
     "tool-security",

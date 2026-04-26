@@ -2,13 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   classifyMcpTool,
+  createAuditRecord,
+  createMessageEnvelope,
+  createSessionEnvelope,
   createUnsignedManifestCertificate,
+  digestTrustArtifact,
   evaluateMcpCall,
   evaluateApprovalGrant,
   evaluateSecureContextPolicy,
   fingerprintMcpManifest,
   markUntrustedMcpOutput,
-  projectMcpOutputToContextPacket
+  projectMcpOutputToContextPacket,
+  recordMessageSequence,
+  validateMessageEnvelope,
+  validateSessionGrant
 } from '../src/index.js';
 
 test('classifies narrow read tools as read risk', () => {
@@ -182,7 +189,178 @@ test('projects MCP output into a tainted context packet', () => {
   });
 
   assert.equal(packet.id, 'packet-1');
-  assert.equal(packet.ext['mcp-trust-gate'].tainted, true);
-  assert.equal(packet.ext['mcp-trust-gate'].instructionUse, 'forbidden');
+  assert.equal(packet.ext['mcp-stargate'].tainted, true);
+  assert.equal(packet.ext['mcp-stargate'].instructionUse, 'forbidden');
   assert.equal(packet.provenance.sourceRefs[0]?.serverId, 'hostile');
+});
+
+test('creates session envelopes from scoped grants', () => {
+  const grant = {
+    kind: 'session_grant' as const,
+    grantId: 'grant-1',
+    clientId: 'starconsole',
+    serverId: 'docs',
+    audience: 'starconsole',
+    purpose: 'Read docs for current task',
+    allowedActions: ['read' as const],
+    issuedBy: 'orion',
+    issuedAt: '2026-04-26T00:00:00.000Z',
+    expiresAt: '2026-04-27T00:00:00.000Z',
+    manifestFingerprint: 'abc123',
+    signature: {
+      algorithm: 'none' as const
+    }
+  };
+
+  const envelope = createSessionEnvelope(grant, {
+    sessionId: 'session-1',
+    transport: 'stdio',
+    createdAt: '2026-04-26T01:00:00.000Z'
+  });
+
+  assert.equal(envelope.sessionId, 'session-1');
+  assert.equal(envelope.grantId, 'grant-1');
+  assert.equal(envelope.lastSequence, 0);
+  assert.deepEqual(
+    validateSessionGrant(grant, {
+      action: 'read',
+      audience: 'starconsole',
+      manifestFingerprint: 'abc123',
+      now: new Date('2026-04-26T12:00:00.000Z')
+    }),
+    []
+  );
+});
+
+test('rejects session grant scope mismatches', () => {
+  const reasons = validateSessionGrant(
+    {
+      kind: 'session_grant',
+      grantId: 'grant-1',
+      clientId: 'starconsole',
+      serverId: 'docs',
+      audience: 'starconsole',
+      purpose: 'Read docs for current task',
+      allowedActions: ['read'],
+      issuedBy: 'orion',
+      issuedAt: '2026-04-25T00:00:00.000Z',
+      expiresAt: '2026-04-25T01:00:00.000Z',
+      manifestFingerprint: 'expected',
+      signature: {
+        algorithm: 'none'
+      }
+    },
+    {
+      action: 'write',
+      audience: 'other-client',
+      manifestFingerprint: 'actual',
+      now: new Date('2026-04-26T00:00:00.000Z')
+    }
+  );
+
+  assert.deepEqual(reasons, [
+    'session grant is expired',
+    "session grant does not allow action 'write'",
+    "session grant does not allow audience 'other-client'",
+    'session grant manifest fingerprint does not match'
+  ]);
+});
+
+test('validates message sequence, session, and payload digest', () => {
+  const session = createSessionEnvelope(
+    {
+      kind: 'session_grant',
+      grantId: 'grant-1',
+      clientId: 'starconsole',
+      serverId: 'docs',
+      purpose: 'Read docs',
+      allowedActions: ['read'],
+      issuedBy: 'orion',
+      issuedAt: '2026-04-26T00:00:00.000Z',
+      signature: {
+        algorithm: 'none'
+      }
+    },
+    {
+      sessionId: 'session-1'
+    }
+  );
+  const message = createMessageEnvelope(session, {
+    sequence: 1,
+    nonce: 'nonce-1',
+    direction: 'client_to_server',
+    method: 'tools/call',
+    toolName: 'docs.read',
+    payload: {
+      path: 'README.md'
+    }
+  });
+
+  assert.equal(message.payloadDigest, digestTrustArtifact({ path: 'README.md' }));
+  assert.deepEqual(validateMessageEnvelope(session, message), []);
+
+  const advanced = recordMessageSequence(session, message);
+  const replayReasons = validateMessageEnvelope(advanced, message);
+  assert.deepEqual(replayReasons, [
+    'message envelope sequence 1 does not match expected 2'
+  ]);
+});
+
+test('rejects unencrypted messages for encrypted sessions', () => {
+  const session = createSessionEnvelope(
+    {
+      kind: 'session_grant',
+      grantId: 'grant-1',
+      clientId: 'starconsole',
+      serverId: 'remote-docs',
+      purpose: 'Read remote docs',
+      allowedActions: ['read'],
+      issuedBy: 'orion',
+      issuedAt: '2026-04-26T00:00:00.000Z',
+      signature: {
+        algorithm: 'none'
+      }
+    },
+    {
+      sessionId: 'session-enc',
+      keyAgreement: {
+        algorithm: 'x25519',
+        publicKey: 'client-public-key'
+      }
+    }
+  );
+  const message = createMessageEnvelope(session, {
+    sequence: 1,
+    nonce: 'nonce-1',
+    direction: 'server_to_client',
+    payload: 'plaintext result'
+  });
+
+  assert.deepEqual(validateMessageEnvelope(session, message), [
+    'message envelope is not encrypted for encrypted session'
+  ]);
+});
+
+test('creates hash-chained audit records', () => {
+  const first = createAuditRecord({
+    eventType: 'session_created',
+    event: {
+      sessionId: 'session-1'
+    },
+    sessionId: 'session-1',
+    timestamp: '2026-04-26T00:00:00.000Z'
+  });
+  const second = createAuditRecord({
+    eventType: 'message_observed',
+    event: {
+      messageId: 'message-1'
+    },
+    sessionId: 'session-1',
+    messageId: 'message-1',
+    previousRecordDigest: first.recordDigest,
+    timestamp: '2026-04-26T00:01:00.000Z'
+  });
+
+  assert.equal(second.previousRecordDigest, first.recordDigest);
+  assert.notEqual(second.recordDigest, first.recordDigest);
 });

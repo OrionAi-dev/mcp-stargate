@@ -1,6 +1,6 @@
 # Security
 
-MCP Trust Gate is security-sensitive software. Please report suspected vulnerabilities privately instead of opening a public issue with exploit details.
+MCP Stargate is security-sensitive software. Please report suspected vulnerabilities privately instead of opening a public issue with exploit details.
 
 ## Scope
 

@@ -82,6 +82,77 @@ export interface ApprovalGrant {
   signature: SignatureEnvelope;
 }
 
+export interface SessionGrant {
+  kind: 'session_grant';
+  grantId: string;
+  clientId: string;
+  serverId: string;
+  audience?: string;
+  purpose: string;
+  allowedActions: GuardAction[];
+  issuedBy: string;
+  issuedAt: string;
+  expiresAt?: string;
+  manifestFingerprint?: string;
+  capabilityCertificateIds?: string[];
+  signature: SignatureEnvelope;
+}
+
+export interface SessionEnvelope {
+  kind: 'session_envelope';
+  sessionId: string;
+  grantId: string;
+  clientId: string;
+  serverId: string;
+  audience?: string;
+  purpose: string;
+  transport: 'stdio' | 'http' | 'sse' | 'streamable-http' | 'unknown';
+  createdAt: string;
+  expiresAt?: string;
+  lastSequence: number;
+  keyAgreement?: {
+    algorithm: 'none' | 'x25519' | 'p256';
+    publicKey?: string;
+  };
+}
+
+export interface MessageEnvelope<T = unknown> {
+  kind: 'message_envelope';
+  sessionId: string;
+  messageId: string;
+  sequence: number;
+  nonce: string;
+  direction: 'client_to_server' | 'server_to_client' | 'gate_internal';
+  method?: string;
+  toolName?: string;
+  payload?: T;
+  payloadDigest: string;
+  encrypted: boolean;
+  signature?: SignatureEnvelope;
+}
+
+export type AuditEventType =
+  | 'session_created'
+  | 'message_observed'
+  | 'decision_recorded'
+  | 'approval_used'
+  | 'context_projected';
+
+export interface AuditRecord {
+  kind: 'audit_record';
+  recordId: string;
+  eventType: AuditEventType;
+  sessionId?: string;
+  messageId?: string;
+  decisionId?: string;
+  approvalGrantId?: string;
+  projectedContextPacketId?: string;
+  previousRecordDigest?: string;
+  eventDigest: string;
+  recordDigest: string;
+  timestamp: string;
+}
+
 export interface SecureContextPolicy {
   audience?: string[];
   allowedActions?: string[];
@@ -163,7 +234,7 @@ export interface ProjectedContextPacket<T = unknown> {
     derivation: 'mcp_trust_gate_projection';
   };
   ext: {
-    'mcp-trust-gate': {
+    'mcp-stargate': {
       tainted: true;
       instructionUse: 'forbidden';
     };
