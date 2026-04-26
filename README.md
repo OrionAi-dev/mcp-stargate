@@ -38,6 +38,7 @@ This initial package contains the alpha Stargate primitives:
 - call decision evaluation
 - secure-context policy checks
 - untrusted MCP output wrappers
+- quarantine prompt wrappers
 - context packet projection helpers
 
 It intentionally does not implement a full MCP proxy yet. Gateway behavior with live transport mediation, remote attestation, revocation lists, and audit ledgers belongs in the next phase.
@@ -97,6 +98,12 @@ The first implementation computes stable fingerprints and validates structure. R
 Prompt injection is the first visible MCP risk. The deeper problem is that MCP lacks a durable trust layer for identity, capability, session confidentiality, provenance, and replayable audit.
 
 MCP Stargate is designed to grow toward secure MCP session envelopes: signed session grants, client/server identity, per-message sequence numbers, replay prevention, optional payload encryption, and hash-chained audit records.
+
+## Quarantine Wrapping
+
+MCP Stargate can wrap untrusted MCP text before a model sees it. The wrapper tells the model to treat the content only as data, report risky requests, and avoid obeying embedded instructions.
+
+This is defense in depth. Deterministic policy still decides whether tools, network, filesystem, secrets, memory, identity, or sharing actions are allowed.
 
 ## Relationship To Secure Context Sharing
 

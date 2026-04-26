@@ -207,6 +207,38 @@ export interface UntrustedMcpOutput<T = unknown> {
   risks: McpCapabilityRisk[];
 }
 
+export type QuarantineFindingCategory =
+  | 'prompt_injection'
+  | 'policy_bypass'
+  | 'tool_escalation'
+  | 'secret_exfiltration'
+  | 'command_execution'
+  | 'filesystem_mutation'
+  | 'network_exfiltration'
+  | 'auth_or_identity'
+  | 'memory_mutation';
+
+export interface QuarantineFinding {
+  category: QuarantineFindingCategory;
+  severity: 'low' | 'medium' | 'high';
+  excerpt: string;
+  reason: string;
+}
+
+export interface QuarantinePromptInput {
+  content: string;
+  source?: UntrustedMcpSource;
+  task?: string;
+}
+
+export interface QuarantineAssessment {
+  kind: 'quarantine_assessment';
+  contentDigest: string;
+  source?: UntrustedMcpSource;
+  findings: QuarantineFinding[];
+  recommendedAction: 'allow' | 'project_only' | 'block' | 'needs_human_review';
+}
+
 export interface ContextPacketProjectionInput<T = unknown> {
   output: T;
   source: UntrustedMcpSource;
@@ -231,7 +263,7 @@ export interface ProjectedContextPacket<T = unknown> {
     createdAt: string;
     createdBy: string;
     sourceRefs: UntrustedMcpSource[];
-    derivation: 'mcp_trust_gate_projection';
+    derivation: 'mcp_stargate_projection';
   };
   ext: {
     'mcp-stargate': {
