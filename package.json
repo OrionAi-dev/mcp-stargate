@@ -1,0 +1,47 @@
+{
+  "name": "mcp-trust-gate",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Certificate-backed trust boundary for MCP tool, resource, and context flows.",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --dts --format esm,cjs --shims",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --import tsx tests/*.test.ts",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-trust-gate",
+    "mcp-certificates",
+    "prompt-injection",
+    "tool-security",
+    "context-security",
+    "agents"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.4",
+    "tsup": "8.5.0",
+    "typescript": "5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.13.1"
+}
